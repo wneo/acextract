@@ -52,6 +52,7 @@ enum ExtractOperationError: Error {
     case renditionMissingData
     case cannotSaveImage
     case cannotCreatePDFDocument
+    case invalidData
 }
 enum Model: String {
     case normal
@@ -125,11 +126,30 @@ struct ImageDirInfo: Codable {
         case two = 2
         case third = 3
         
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(contentValue)
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let v = try container.decode(String.self)
+            if let firstPart = v.components(separatedBy: .decimalDigits.inverted).first(where: { !$0.isEmpty }),
+               let indexNum = Int(firstPart), let s = Scale(rawValue: indexNum) {
+                self = s
+            } else {
+                throw ExtractOperationError.invalidData
+            }
+        }
+        
         var tail: String {
             return "@\(rawValue)x"
         }
+        var contentValue: String {
+            return "\(rawValue)x"
+        }
         var index: Int {
-            return rawValue
+            return rawValue - 1
         }
         
         init(name: String) {
@@ -171,6 +191,11 @@ struct ImageDirInfo: Codable {
     init(fileName: String) {
         images = Scale.createElems(name: fileName)
     }
+    
+    mutating func update(fileName: String) {
+        let scale = Scale(name: fileName)
+        images[scale.index].filename = fileName
+    }
     /*
      {
        "images" : [
@@ -208,12 +233,20 @@ private extension CUINamedImage {
             .replacingOccurrences(of: scale.tail.uppercased(), with: "")
         
         let dirPath = orgPath.deletingLastPathComponent().appendingPathComponent(pureName + ".imageset")
-        let info = ImageDirInfo(fileName: filename)
+        
+        // 检查是否存在
+        var info: ImageDirInfo
+        let jsonURl = dirPath.appendingPathComponent("Contents.json")
+        if FileManager.default.fileExists(atPath: jsonURl.path) {
+            info = try JSONDecoder().decode(ImageDirInfo.self, from: try Data(contentsOf: jsonURl))
+            info.update(fileName: filename)
+        } else {
+            info = ImageDirInfo(fileName: filename)
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let json = try encoder.encode(info)
-        let jsonURl = dirPath.appendingPathComponent("Contents.json")
-        
+
         try FileManager.default.createDirectory(at: dirPath, withIntermediateDirectories: true, attributes: nil)
         try json.write(to: jsonURl)
         
