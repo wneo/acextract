@@ -32,7 +32,8 @@ let cliList = BoolOption(shortFlag: "l", longFlag: "list", helpMessage: "Print c
 let cliVerbose = CounterOption(shortFlag: "v", longFlag: "verbose", helpMessage: "Print more detail. You can use -vv or -vvv for more info.")
 let cliInput = StringOption(shortFlag: "i", longFlag: "input", required: true, helpMessage: "Path to input CAR file.")
 let cliOutput = StringOption(shortFlag: "o", longFlag: "output", required: false, helpMessage: "Path to output directory.")
-cli.addOptions([cliInput, cliOutput, cliList, cliHelp, cliVerbose])
+let cliMode = StringOption(shortFlag: "m", longFlag: "mode", required: false, helpMessage: "Mode of output: dir")
+cli.addOptions([cliInput, cliOutput, cliList, cliHelp, cliVerbose, cliMode])
 
 // Parse.
 do {
@@ -70,7 +71,7 @@ else if let input = cliInput.value {
         }
         // Extract to folder.
         if let output = cliOutput.value {
-            let extract = ExtractOperation(path: output)
+            let extract = ExtractOperation(path: output, mode: cliMode.value)
             try assetsCatalog.performOperation(operation: extract)
         }
     }
